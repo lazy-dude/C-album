@@ -33,7 +33,7 @@ Contains two seemingly novel ideas in quick sort.
 
 ***
 ### sudoku_search.c
-A sudoku searcher based on "constraint satisfaction" ideas.
+A Sudoku searcher based on "constraint satisfaction" ideas.
 
 ***
 ### solitary_number.c
@@ -42,5 +42,7 @@ The quest to find out whether ten is alone or it has one friend at least.
 ***
 And more C codes to investigate.
 
-
+***
+## External library:
+This repository uses [CUnit](http://cunit.sourceforge.net/) testing library.
 
