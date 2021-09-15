@@ -1,3 +1,7 @@
+// https://github.com/soupi/3-C-Sorting-Algorithms/blob/master/QuickSort.c
+
+// quick sort algorithm , pivot is estimated median.
+
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
