@@ -4,7 +4,6 @@
 #include <time.h>
 #include <stdbool.h>
 
-//#define NDEBUG // test or run
 #define TRIES 100000 // 10000000
 
 void Quicksort(int *array, int length);
@@ -14,8 +13,8 @@ int place_pivot(int *array, int low, int high);
 void display(int arr[], int n)
 {
 	
-  	for(int i=0; i<n; i++)
-    	printf("%d ", arr[i]);
+    for(int i=0; i<n; i++)
+        printf("%d ", arr[i]);
     printf("\n");
 
 }
@@ -27,7 +26,7 @@ void swap(int* first, int* second)
     *second = temp;
 }
 
-// median of 3
+// median of 3 numbers
 int median3(int a, int b, int c)
 {
     if (a == b)
@@ -109,78 +108,73 @@ int gen_piv_pem(int arr2[], int low, int high)
     return pivot;
 }
 
-
-
 // sorts the array using quick sort algorithm
-// gets: pointer to array, length of array, compare function, swap function
 void Quicksort(int *array, int length)
 {
-	int low = 0;
-	int high = length-1;
-	quicksort(array, low, high);
+    int low = 0;
+    int high = length-1;
+    quicksort(array, low, high);
 }
 
 
 // sorts the array using quick sort algorithm
-// gets: pointer to array, low index, high index, 
-// compare function, swap function
+// gets: pointer to array, low index, high index
 void quicksort(int *array, int low, int high)
 {
-	if(high>low)
-	{
-		//set pivot location
-		int pivot = place_pivot(array, low, high); 
+    if(high>low)
+    {
+        //set pivot location
+        int pivot = place_pivot(array, low, high); 
 
-		// sort: smaller then larger
-		if(pivot-low < high - pivot)
-		{
-			quicksort(array, low, pivot-1); // sort bottom half
-			quicksort(array, pivot+1, high); // sort top half
-		}else
-		{
-			quicksort(array, pivot+1, high);
-			quicksort(array, low, pivot-1);
-		}
-	}
+        // sort: smaller part then larger part
+        if(pivot-low < high - pivot)
+        {
+            quicksort(array, low, pivot-1); // sort bottom part
+            quicksort(array, pivot+1, high); // sort top part
+        }else
+        {
+            quicksort(array, pivot+1, high);
+            quicksort(array, low, pivot-1);
+        }
+    }
 }
 
 // moves all the objects smaller than low to it's left
 // and all the objects bigger than low to it's right
-// gets: array, low, high, compare function, swap function
+// gets: array, low, high
 int place_pivot(int *array, int low, int high)
 {
-	//int pivot = high;
-	int pivot = gen_piv_pem(array, low, high);
+    //int pivot = high;
+    int pivot = gen_piv_pem(array, low, high);
 	
-	int i=low-1;
-	int j;
-	int save_pivot_arr = array[pivot];
-	swap(&array[pivot], &array[high]);
-	for ( j = low; j < high; j++) 
-	{
-		if(array[j]<save_pivot_arr)
-		{
+    int i=low-1;
+    int j;
+    int save_pivot_arr = array[pivot];
+    swap(&array[pivot], &array[high]);
+    for ( j = low; j < high; j++) 
+    {
+        if(array[j]<save_pivot_arr)
+        {
 			
-			i++;
-			swap(&array[i], &array[j]); 
+            i++;
+            swap(&array[i], &array[j]); 
 			
-		}
-	}
-	swap(&array[i + 1], &array[high]);
+        }
+    }
+    swap(&array[i + 1], &array[high]);
 	
-	assert(i+1>=low);
-	assert(i+1<=high);
-	return i+1; 
+    assert(i+1>=low);
+    assert(i+1<=high);
+    return i+1; 
 }
 
-// TODO general instead of int : Swap , Compare
 bool is_sorted(int *arr, int n)
 {
-	int i;
-	for(i=0; i< n-1; i++)
-		if(arr[i+1]<arr[i])
-			return false;
-	return true;
+    int i;
+    for(i=0; i< n-1; i++)
+        if(arr[i+1]<arr[i])
+            return false;
+    return true;
 }
 
 
