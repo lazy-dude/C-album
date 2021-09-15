@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #define TRIES 100000 // 10000000
 
@@ -30,30 +31,22 @@ void swap(int* first, int* second)
     *second = temp;
 }
 
-// median of 3 numbers
-int median3(int a, int b, int c)
+// min max
+int min(int a,int b)
 {
-    if (a == b)
-        return a;
-    if (b == c)
-        return b;
-    if (a == c)
-        return c;
-    if (b <= c && c <= a && b <= a)
-        return c;
-    if (a <= b && a <= c && b <= c)
-        return b;
-    if (a <= c && c <= b)
-        return c;
-    if (c <= b && b <= a)
-        return b;
-    if (c <= a && a <= b)
-        return a;
-    if (b <= a && a <= c)
-        return a;
-    fprintf(stderr, "Wrong median3, a %d b %d c %d\n", a, b, c);
-
-    return 0;
+    return a < b ? a : b;
+}
+int max(int a,int b)
+{
+    return a > b ? a : b;
+}
+// median of 3
+int median3(int a, int b, int c)
+{  
+    intmax_t tot_v = a + b + c ;
+    int max_v = max(a, max(b, c));
+    int min_v = min(a, min(b, c));
+    return tot_v - max_v - min_v;
 }
 
 double ratio(void)
