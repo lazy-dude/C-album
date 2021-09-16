@@ -17,7 +17,7 @@ int place_pivot(int *array, int low, int high);
 
 void display(int arr[], int n)
 {
-	
+    
     for(int i=0; i<n; i++)
         printf("%d ", arr[i]);
     printf("\n");
@@ -58,7 +58,7 @@ double ratio(void)
 int gen_piv_pem(int arr2[], int low, int high)
 {
     int pivot = low;
-	
+    
     if (high == low + 1) { // one choice
 
         return low;
@@ -143,7 +143,7 @@ int place_pivot(int *array, int low, int high)
 {
     //int pivot = high;
     int pivot = gen_piv_pem(array, low, high);
-	
+    
     int i=low-1;
     int j;
     int save_pivot_arr = array[pivot];
@@ -152,14 +152,14 @@ int place_pivot(int *array, int low, int high)
     {
         if(array[j]<save_pivot_arr)
         {
-			
+            
             i++;
             swap(&array[i], &array[j]); 
-			
+            
         }
     }
     swap(&array[i + 1], &array[high]);
-	
+    
     assert(i+1>=low);
     assert(i+1<=high);
     return i+1; 
@@ -181,7 +181,7 @@ int main(void)
     int *arr = malloc(sizeof(int)*TRIES);
     srand(time(NULL));
     for(i=0; i<TRIES; i++)
-    	arr[i]=rand();
+        arr[i]=rand();
     Quicksort(arr, TRIES);
     
     bool is=is_sorted(arr,TRIES);

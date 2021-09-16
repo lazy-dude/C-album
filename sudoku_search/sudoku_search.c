@@ -30,15 +30,15 @@ const static char output_sep='$';
 #define BUFF_SIZE 256
 #define INFO_BUFF_SIZE 64
 #define fatal_err(...) \
-	do { \
-		char buff[BUFF_SIZE]; \
-		fprintf(stderr,"\n"); \
-		fprintf(stderr, "FILE:%s\n", __FILE__); \
+    do { \
+        char buff[BUFF_SIZE]; \
+        fprintf(stderr,"\n"); \
+        fprintf(stderr, "FILE:%s\n", __FILE__); \
         fprintf(stderr, "FUNCTION:%s\n", __FUNCTION__); \
         fprintf(stderr,"LINE:%d\n",__LINE__); \
         snprintf(buff, sizeof(buff),__VA_ARGS__); \
-		fatal_err_callee(buff); \
-	} while (0)
+        fatal_err_callee(buff); \
+    } while (0)
 
 #ifdef DEBUG
 #define print_info(...) \

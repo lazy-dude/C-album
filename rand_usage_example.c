@@ -48,7 +48,7 @@ static struct data
     gf_t variance;
     gf_t * probability_ptr;
     // inserted by compiler...
-	const uint64_t padding;// 8-byte alignment, 8-byte data
+    const uint64_t padding;// 8-byte alignment, 8-byte data
 
 } my_data;
 
@@ -92,9 +92,9 @@ int main(void)
 #ifdef NDEBUG
     print_all(my_data.ctr, lo, hi, sum, my_data.mean, my_data.variance);
 
-	
+    
 #else // NDEBUG
-	int init_reg = CUE_NOMEMORY; // CUnit
+    int init_reg = CUE_NOMEMORY; // CUnit
 
     init_reg = CU_initialize_registry();
     if (init_reg != CUE_SUCCESS)
@@ -125,7 +125,7 @@ int main(void)
     CU_cleanup_registry();
     // finish tests.
 #endif // NDEBUG
-	free(my_data.probability_ptr);
+    free(my_data.probability_ptr);
     return EXIT_SUCCESS;
 }
 
