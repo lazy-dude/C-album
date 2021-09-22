@@ -1,5 +1,7 @@
 # An album of some C codes.
 
+A number of experimental C codes in a variety of fields. Some math problems are taken from [here](https://mathworld.wolfram.com/UnsolvedProblems.html).
+
 ## Compiler call in Linux:
 ***
 
@@ -29,7 +31,7 @@ Some hints and stats for 196 problem. Also called "Lychrel numbers".
 
 ***
 ### quick_sort_pem.c
-Contains two seemingly novel ideas in quick sort.
+Contains two seemingly rare ideas in quick sort.
 
 ***
 ### sudoku_search.c
