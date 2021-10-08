@@ -48,3 +48,8 @@ And more C codes to investigate.
 ## External library:
 This repository uses [CUnit](http://cunit.sourceforge.net/) testing library.
 
+***
+## Donate
+Paypal donation e-mail is <ompp00@protonmail.com>
+
+
