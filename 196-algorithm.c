@@ -249,7 +249,7 @@ void test_average(void);
 
 //////////////////////
 
-int main(void) // TODO stats, first - last digit equal , odds , average
+int main(void) // first/last digit equality, center_left/center_right digit eq, average of digits , oddly occurred digits
 {
 
 #ifndef NDEBUG
