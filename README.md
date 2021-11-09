@@ -29,6 +29,16 @@ There are many integrated development environments (IDE) available for variety o
 ### 196-algorithm.c
 Some hints and stats for 196 problem. Also called "Lychrel numbers".
 
+Output text explanation:
+
+fd_ld: first/last digit equality
+
+cl_cr: center_left/center_right digit eq
+
+av: average of digits
+
+odds: oddly occurred digits
+
 ***
 ### quick_sort_pem.c
 Contains two seemingly rare ideas in quick sort.
