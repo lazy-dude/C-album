@@ -40,10 +40,6 @@ av: average of digits
 odds: oddly occurred digits
 
 ***
-### quick_sort_pem.c
-Contains two seemingly rare ideas in quick sort.
-
-***
 ### sudoku_search.c
 A Sudoku searcher based on "constraint satisfaction" ideas.
 
