@@ -208,8 +208,14 @@ bool cld_crd_equal(char * num)
     char cld; 
     char crd;
     
-    crd = num[MAX_DIG - len/2-1];
-    cld = num[MAX_DIG - len/2 -2];
+    if(len%2==0)
+    {
+        crd = num[MAX_DIG - len/2-1];
+        cld = num[MAX_DIG - len/2 -2];
+    }else{
+        crd = num[MAX_DIG - len/2-1];
+        cld = num[MAX_DIG - len/2 -3];
+    }
     
     assert(isdigit(crd));
     assert(isdigit(cld));
@@ -582,6 +588,14 @@ void test_cld_crd_equal(void)
     CU_ASSERT_EQUAL(cld_crd_equal(num),false);
     fill("8801197801088",num);
     CU_ASSERT_EQUAL(cld_crd_equal(num),false);
+    fill("897100798",num);
+    CU_ASSERT_EQUAL(cld_crd_equal(num),false);
+    fill("18408442064004592449047",num);
+    CU_ASSERT_EQUAL(cld_crd_equal(num),false);
+    fill("12311",num);
+    CU_ASSERT_EQUAL(cld_crd_equal(num),false);
+    fill("12320",num);
+    CU_ASSERT_EQUAL(cld_crd_equal(num),true);
     
     free(num);
 }
