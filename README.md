@@ -56,6 +56,7 @@ This repository uses [CUnit](http://cunit.sourceforge.net/) testing library.
 
 ***
 ## Donate
-Paypal donation e-mail is <ompp00@protonmail.com>
+[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/paypalme/ompp00)
+
 
 
