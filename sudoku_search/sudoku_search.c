@@ -1,6 +1,6 @@
 // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ //
 
-// sudoku search solver.
+// Sudoku constraint satisfaction and search solver.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,21 +11,21 @@
 #include <stdarg.h>
 #include <stddef.h>
 #include <time.h>
+#include <assert.h>
 
-// TODO these settings could be changed:
-const static char VERSION[] = "2.1"; // previous was 2.0, next release ?
-//#define DEBUG // TODO activate for massive stdout printing, no impact on output file
+const static char VERSION[] = "3.0";
 const static double RUN_TIME = 30.0;// roughly runs for this time, in seconds
 const static unsigned N_MAX = 1000; // Number of tries for each sudoku puzzle
 
-
 #define BLOCK_SIZE 3
-#define GRID_SIZE (BLOCK_SIZE*BLOCK_SIZE) // help from cboard forum
+#define GRID_SIZE (BLOCK_SIZE*BLOCK_SIZE)
+#define UNUSED(x) (void)(x)
 
 const static char input_sep='/';
 const static char output_sep='$';
 #define LINE_LEN 126
 #define PRE_ALLOC 100
+#define ALLOC_FACTOR 10000
 
 #define BUFF_SIZE 256
 #define INFO_BUFF_SIZE 64
@@ -55,103 +55,84 @@ const static char output_sep='$';
     } while(0);
 #endif // DEBUG
 
-
 const static uint16_t MAX_HASH=(GRID_SIZE*GRID_SIZE);
 
-enum SINGLE_VALUE // values of cells
-{
-    ONE = 1,
-    // ...
-    NINE = 1<<(GRID_SIZE-1)//1<<8
-
-};
+const unsigned ONE = 1;
+const unsigned NINE = 1<<(GRID_SIZE-1);
 
 struct sudoku_state
 {
     uint16_t min_hash;
-    uint16_t hash; // sum of cells with 0 contradiction
+    uint16_t hash; // sum of bounded cells
+    bool contra; // contradiction on this sudoku state
     uint16_t cell[GRID_SIZE][GRID_SIZE];
-    bool cell_isv[GRID_SIZE][GRID_SIZE]; // cell is single valued
-
-    uint8_t contradiction[GRID_SIZE][GRID_SIZE];
 
     // Padding if required
-
 };
 typedef struct sudoku_state ss_t;
 
-uint16_t all_possible_in_cell(void);
-uint16_t compute_hash(ss_t);
+uint16_t nine_possible(void);
+void compute_hash(ss_t *ss);
+bool no_contradiction(ss_t *ss);
+void compute_contra(ss_t *ss);
 
 bool is_single_value(uint16_t );
 bool sudoku_states_equal(ss_t, ss_t);
-bool sudoku_is_solved_hashwise(ss_t);
-bool sudoku_is_solved_cellwise(ss_t ss);
+bool sudoku_is_solved_hashwise(ss_t * ss_ptr);
 
-void init_isv(ss_t * const ss_ptr);
-
-ss_t get_ss(char const * const ip, char const * const op);
+void zero_minhash(ss_t * ss_ptr);
+ss_t get_ss(char const * const input, char const * const output, int count, time_t begin);
 
 void fprint_ss(FILE *of, ss_t ss);
 unsigned count_zero_bits_on_right(uint32_t);
 
-bool ro_co_re(uint8_t,uint8_t,uint8_t,uint8_t);
+bool row_column_region(uint8_t,uint8_t,uint8_t,uint8_t);
 bool in_region(uint8_t,uint8_t,uint8_t,uint8_t );
 bool in_range(uint8_t v,uint8_t min, uint8_t max);
 
-
-noreturn void solve
-(char const * const ip, char const * const op,double const rt, unsigned nmax); // help from cboard forum
+noreturn void solve(char const * const ip, char const * const op,double const rt, unsigned nmax);
 void check_time(time_t time_beg,double rt_input);
-void update_3
-(ss_t *const root_ptr, ss_t *const ss1_ptr,ss_t *const ss2_ptr);
-void end_ptr_is_null
-(ss_t *const root_ptr,ss_t *const ss1_ptr, ss_t *const ss2_ptr,
- char const *const ip, char const* const op, FILE* of);
+void update_3(ss_t *const root_ptr, ss_t *const ss1_ptr,ss_t *const ss2_ptr);
+
 void solve_info(int row, int column,size_t n1,size_t n2);
 
-bool is_unsolvable (ss_t);
+bool is_unsolvable(ss_t);
 uint16_t eliminate_single_value(uint16_t,uint16_t);
+void naked_cell(ss_t * ss_ptr);
+void hidden_row(ss_t * ss_ptr);
+void hidden_column(ss_t * ss_ptr);
+uint16_t remove_right_one(uint16_t u);
 
 void implement_constraints(ss_t *);
 
-void update_isv_hash(ss_t * const ss_ptr);
+void update_hashes(ss_t * const ss_ptr);
 
-void compute_contradictions(ss_t *);
-
-
-ss_t *
-fill_cells(ss_t *, size_t,bool, char const * const op, unsigned nmax);// help from cboard forum
+ss_t *fill_cells(ss_t *, size_t,bool, char const * const op, unsigned nmax);
 ss_t * go_back(ss_t *root_ptr,ss_t * end_ptr);
-void print_cellwise_solved(ss_t const *const end_ptr, char const *const op, size_t n);
+void print_solved(ss_t const *const end_ptr, char const *const op, size_t n);
 void print_contra (ss_t const *const end_ptr, bool contra, bool pre_contra );
 uint16_t first_multi_value_cell(ss_t const*const current_ptr, int *row_ptr, int *column_ptr);
-void print_4_cells
-(uint16_t root_cell, uint16_t current_cell,uint16_t cell, uint16_t end_cell);
-
+void print_4_cells(uint16_t root_cell, uint16_t current_cell,uint16_t cell, uint16_t end_cell);
 
 uint16_t next_cell(uint16_t cell);
 uint8_t try_next(uint16_t cell);
 
 void update(ss_t * const, ss_t * const);
 
-void previous_cell(int *const row, int *const column);
 bool has_contra (ss_t ss);
-bool def_no_solution(ss_t ss);
+bool no_solution(ss_t ss);
 
-noreturn void fatal_err_callee(const char * const); // help from comp.lang.c
+noreturn void fatal_err_callee(const char * const);
 void print_info_callee(const char * const s);
 
 void *my_alloc(size_t );
 
 uint8_t popcnt(uint32_t v);
-void first_uneq_cell
-(const ss_t current_ptr,const ss_t end_ptr,int *const row,int *const column);
+void first_uneq_cell(const ss_t current_ptr,const ss_t end_ptr,int *const row,int *const column);
 
-bool is_repeated
-(ss_t *const root_ptr,ss_t *const end_ptr);
+bool is_repeated(ss_t *const root_ptr,ss_t *const end_ptr);
 
-void print_finish(char const * const ip, char const * const op);
+void print_finish(char const * const ip, char const * const op, int count, time_t begin);
 
 void print_cell_callee(const char* const cell_name,uint16_t cell);
 #define print_cell(var_name) print_cell_callee(#var_name,var_name)
@@ -173,7 +154,7 @@ int main(int argc, char *argv[])
     char *t_ptr;
     unsigned nmax=N_MAX;
     char *n_ptr;
-
+    
     for(i=1; i<argc; i++)
     {
         if(strcmp(argv[i], "-h")==0)
@@ -204,7 +185,6 @@ int main(int argc, char *argv[])
             nmax=(unsigned)strtoul(n_ptr, NULL, 10);
             printf("nmax is %u\n",nmax);
         }
-
     }
 
     solve(inputf_name, outputf_name, rt_input, nmax);
@@ -212,7 +192,7 @@ int main(int argc, char *argv[])
     return EXIT_SUCCESS;
 }
 
-char* get_arg(char const*const arg_str, char *beg_str) // TODO default_str can be input to simplify main()
+char* get_arg(char const*const arg_str, char *beg_str)
 {
     char *i_ptr;
     char *out_str=NULL;
@@ -224,7 +204,7 @@ char* get_arg(char const*const arg_str, char *beg_str) // TODO default_str can b
         if(out_str==NULL)
             fatal_err("Wrong argument, arg is %s beg is %s",arg_str, beg_str);
     }
-    else // i_ptr==NULL
+    else
         return NULL;
 
     printf("str is %s\n",out_str+1);
@@ -236,6 +216,7 @@ noreturn void print_version(void)
     printf("Version is %s\n",VERSION);
     exit (EXIT_SUCCESS);
 }
+
 noreturn void print_help(void)
 {
     printf("Enter -h as argument to see this help.\n");
@@ -258,48 +239,34 @@ void check_time(time_t time_beg, double rt)
         fatal_err("time is over, time passed %f seconds",dt);
 }
 
-void update_3
-(ss_t *const root_ptr, ss_t *const ss1_ptr,ss_t *const ss2_ptr)
+void update_3(ss_t *const root_ptr, ss_t *const ss1_ptr,ss_t *const ss2_ptr)
 {
-
     implement_constraints(ss1_ptr);
     *ss2_ptr=*ss1_ptr;
 
-    update_isv_hash(ss2_ptr);
-
-    compute_contradictions(ss2_ptr);
+    update_hashes(ss2_ptr);
 
     if(is_unsolvable(*ss2_ptr))
         fatal_err("Problem is unsolvable after implementing constraints.");
 
-
     *root_ptr=*ss2_ptr;
-
-}
-
-void end_ptr_is_null
-(ss_t *const root_ptr,ss_t *const ss1_ptr, ss_t *const ss2_ptr,
- char const * const ip, char const *const op, FILE* of)
-{
-    *root_ptr=get_ss(ip, op);
-    *ss2_ptr=*root_ptr;
-    *ss1_ptr=*ss2_ptr;
-    fprintf(of, "end_ptr is NULL:\n");
-    fprint_ss(of, *ss2_ptr);
+    return;
 }
 
 void solve_info(int row, int column,size_t n1,size_t n2)
 {
+    UNUSED(row);
+    UNUSED(column);
+    UNUSED(n1);
+    UNUSED(n2);
     print_info("// @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ //\n");
 
-    print_info("row is %d, column is %d, n is %zu n2 is %zu\n"
-               ,row,column,n1,n2);
+    print_info("row is %d, column is %d, n is %zu n2 is %zu\n", row, column, n1, n2);
 
     print_info("// @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ //\n");
 }
 
-noreturn void solve
-(char const * const ip, char const * const op, double const rt_input, unsigned nmax)
+noreturn void solve(char const * const input, char const * const output, double const rt_input, unsigned nmax)
 {
     time_t time_beg;
     time(&time_beg);
@@ -314,43 +281,42 @@ noreturn void solve
     int row=0;
     int column=0;
 
-    long pos=0;// file positioning
+    long file_pos=0;
+    int count = 0;
 
-    FILE* of=fopen(op, "wt");
-    if(of==NULL)
-        fatal_err("Initially can not open output file %s", op);
-    fprintf(of, "%c\n", output_sep);
-    fclose(of);
+    FILE* output_file=fopen(output, "wt");
+    if(output_file==NULL)
+        fatal_err("Initially can not open output file %s", output);
+    fprintf(output_file, "%c\n", output_sep);
+    fclose(output_file);
 
-    FILE* sif=NULL;
+    FILE* input_file=NULL;
+    output_file=fopen(output, "at");
+        if(output_file==NULL)
+            fatal_err("Can not open output file %s", output);
+
+    input_file=fopen(input, "rt");
+    if(input_file==NULL)
+        fatal_err("failed to open %s",input);
+    
     do
     {
         check_time(time_beg, rt_input);
 
-        of=fopen(op, "at");
-        if(of==NULL)
-            fatal_err("Can not open output file %s", op);
+        fseek(input_file, file_pos * (long)sizeof(char), SEEK_SET);
+        if(feof(input_file))
+            print_finish(input, output, count, time_beg);
 
-        sif=fopen(ip, "rt");
-        if(sif==NULL)
-            fatal_err("failed to open %s",ip);
-        fseek(sif, pos * (long)sizeof(char), SEEK_SET);
-        if(feof(sif) )
-        {
-            print_finish(ip, op);
-        }
+        fseek(input_file, file_pos * (long)sizeof(char), SEEK_SET);
+        file_pos=ftell(input_file);
 
-        long pre_pos7;
-        pre_pos7=pos;
-        fseek(sif, pos * (long)sizeof(char), SEEK_SET);
-        pos=ftell(sif);
-
-        root_ptr=my_alloc(PRE_ALLOC*sizeof (ss_t) );
+        root_ptr=my_alloc(ALLOC_FACTOR*sizeof(ss_t));
         if(root_ptr==NULL)
             fatal_err("root_ptr malloc failed.");
         end_ptr=root_ptr+1;
 
-        ss=get_ss(ip, op);
+        ss=get_ss(input, output, count, time_beg);
+        count++;
 
         if(is_unsolvable(ss))
             fatal_err("Problem is unsolvable initially.");
@@ -359,46 +325,31 @@ noreturn void solve
 
         update_3(root_ptr,&ss,&ss2);
 
-
         print_info("// @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ //\n");
-        if(sudoku_is_solved_cellwise(ss2))
+        if(sudoku_is_solved_hashwise(&ss2))
         {
             printf("Problem is solved after implementing constraints.\n");
-
-            fprint_ss(stdout, ss2);
-
+            print_solved(&ss2, output, n);
             continue;
         }
 
-        ss_t * temp_ptr=realloc(root_ptr,(n+PRE_ALLOC)*sizeof (ss_t)); // 0..n-1
-        if(temp_ptr!=NULL)
-            root_ptr=temp_ptr;
-        else
-            fatal_err("realloc failed");
-
-        end_ptr=fill_cells(root_ptr,n,false, op,nmax);
+        end_ptr=fill_cells(root_ptr, n, false, output, nmax);
         if(end_ptr==NULL)
-        {
-            end_ptr_is_null( root_ptr,&ss,&ss2,ip,op,of);
-
-            continue;
-        }
+            fatal_err("end_ptr returned from fill_cells is NULL");
 
         if(end_ptr->hash==MAX_HASH)
-            printf("Filled all cells,row is %d column is %d n is %zu\n",row,column,n);
+            print_info("\nFilled all cells,row is %d column is %d n is %zu\n",row, column, n);
 
-        if(sudoku_is_solved_cellwise(*end_ptr))
+        if(sudoku_is_solved_hashwise(end_ptr))
         {
             printf("Problem is solved after filling.\n");
-
             continue;
         }
 
-
         solve_info(row, column, n, n2);
-
-        update_isv_hash(&ss2);
-        compute_contradictions(end_ptr);
+        n = 1;
+        free(end_ptr);
+        update_hashes(&ss2);
 
         fprint_ss(stdout, *end_ptr);
 
@@ -406,11 +357,11 @@ noreturn void solve
             free(root_ptr);
         if(end_ptr!=NULL)
             free(end_ptr);
-
-        fclose(sif);
-        fclose(of);
     }
     while(true);
+    
+    fclose(input_file);
+    fclose(output_file);
 }
 
 uint16_t next_cell(uint16_t cell)
@@ -421,13 +372,12 @@ uint16_t next_cell(uint16_t cell)
     if(!is_single_value(first_cell))
         fatal_err("first_cell is %u",first_cell);
 
-    print_info("^ %s:cell is %u first_cell is %u\n"
-               ,__FUNCTION__,cell,first_cell);
+    print_info("^ %s:cell is %u first_cell is %u\n", __FUNCTION__, cell, first_cell);
 
     return first_cell;
 }
 
-uint8_t try_next(uint16_t cell) // TODO order can be random rather than 1..9
+uint8_t try_next(uint16_t cell) // TODO order can be other heuristic rather than 1..9
 {
     unsigned count;
     uint8_t next=0;
@@ -446,40 +396,57 @@ uint8_t try_next(uint16_t cell) // TODO order can be random rather than 1..9
 }
 
 ///////////////////////////////////////
-ss_t * go_back(ss_t *root_ptr,ss_t * end_ptr)
+
+ss_t * go_back(ss_t *root_ptr, ss_t * end_ptr)
 {
     ss_t * curr1_ptr;
     for(curr1_ptr=end_ptr-1; curr1_ptr>root_ptr; curr1_ptr--)
     {
-        if(!def_no_solution(*curr1_ptr))
+        if(!no_solution(*curr1_ptr))
         {
-            implement_constraints((curr1_ptr));
-            *(end_ptr)=*(curr1_ptr);
+            implement_constraints(curr1_ptr);
+            *end_ptr=*curr1_ptr;
 
-            if(!def_no_solution(*end_ptr))
+            if(!no_solution(*end_ptr))
                 break;
         }
-
     }
+
+    int row, column;
+    uint16_t current_cell=first_multi_value_cell(curr1_ptr, &row, &column);
+    uint64_t removed=current_cell;
+    
+    if(!(row==GRID_SIZE-1 && column==GRID_SIZE-1)) // TODO maybe more backward
+    {
+        removed = remove_right_one(current_cell);
+        curr1_ptr->cell[row][column] = removed;
+    }
+    if(is_single_value(removed))
+        implement_constraints(curr1_ptr);
+        
+    *end_ptr=*curr1_ptr;
+    
+    assert(curr1_ptr >= root_ptr);
+    assert(curr1_ptr <= end_ptr);
     return curr1_ptr;
 }
 
-void print_cellwise_solved(ss_t const *const end_ptr, char const *const op, size_t n)
+void print_solved(ss_t const *const end_ptr, char const *const output, size_t n)
 {
+    UNUSED(n);
     print_info("Problem is solved, n is %zu\n",n);
 
     fprint_ss(stdout, *end_ptr);
 
-    FILE* of=fopen(op, "at");
-    fprint_ss(of, *end_ptr);
-    fprintf(of, "%c\n", output_sep);
+    FILE* output_file=fopen(output, "at");
+    fprint_ss(output_file, *end_ptr);
+    fprintf(output_file, "%c\n", output_sep);
 
-    fclose(of);
+    fclose(output_file);
 }
 
-void print_contra (ss_t const *const end_ptr,bool contra, bool pre_contra )
+void print_contra(ss_t const *const end_ptr, bool contra, bool pre_contra)
 {
-
     contra=has_contra(*end_ptr);
 
     char pc_str[10]= {'\0'};
@@ -494,10 +461,9 @@ void print_contra (ss_t const *const end_ptr,bool contra, bool pre_contra )
 uint16_t first_multi_value_cell(ss_t const*const current_ptr, int *row_ptr, int *column_ptr)
 {
     uint16_t current_cell=current_ptr->cell[0][0];
-    int row=*row_ptr;
-    int column=*column_ptr;
+    int row=0;
+    int column=0;
 
-    column=0;
     for(row=0; row<=(GRID_SIZE-1); row++)
     {
         current_cell=current_ptr->cell[row][column];
@@ -505,13 +471,9 @@ uint16_t first_multi_value_cell(ss_t const*const current_ptr, int *row_ptr, int 
             break;
         for(column=0; column<=(GRID_SIZE-1); column++)
         {
-
             current_cell=current_ptr->cell[row][column];
             if(!is_single_value(current_cell))
             {
-                if(current_cell==0)
-                    fatal_err("` current_cell is 0, row is %d, column is %d\n",row,column);
-
                 print_info("` contra is false, row is %d, column is %d \n",row,column);
                 print_cell(current_cell);
 
@@ -522,7 +484,6 @@ uint16_t first_multi_value_cell(ss_t const*const current_ptr, int *row_ptr, int 
         if(column>(GRID_SIZE-1))
         {
             column=0;
-
             continue;
         }
 
@@ -542,8 +503,7 @@ uint16_t first_multi_value_cell(ss_t const*const current_ptr, int *row_ptr, int 
     return current_cell;
 }
 
-void print_4_cells
-(uint16_t root_cell, uint16_t current_cell,uint16_t cell, uint16_t end_cell)
+void print_4_cells(uint16_t root_cell, uint16_t current_cell,uint16_t cell, uint16_t end_cell)
 {
     print_cell(root_cell);
     print_cell(current_cell);
@@ -553,28 +513,19 @@ void print_4_cells
     return;
 }
 
-
-ss_t * fill_cells
-( ss_t * root_ptr, size_t n, bool pre_contra, char const * const op, unsigned nmax)
+ss_t * fill_cells(ss_t * root_ptr, size_t n, bool pre_contra, char const * const output, unsigned nmax)
 {
     uint16_t root_cell=0;
     uint16_t end_cell=0;
 
     int row=0;
     int column=0;
-    static ss_t * end_ptr;
+     ss_t * end_ptr = NULL; 
     bool contra=false;
-    static ss_t  *current_ptr; // ?
-
+     ss_t  *current_ptr = NULL; 
+    
     if(root_ptr==NULL)
         fatal_err("wrong pointer.");
-
-
-    ss_t* temp_ptr=realloc(root_ptr,(n+PRE_ALLOC)*sizeof (ss_t));
-    if(temp_ptr!=NULL)
-        root_ptr=temp_ptr;
-    else
-        fatal_err("root_ptr realloc failed. n is %zu",n);
 
     if(n==0)
         fatal_err("n is 0");
@@ -582,28 +533,32 @@ ss_t * fill_cells
         fatal_err("n exceeded nmax, n is %zu",n);
 
     print_info("\n--------------------------------\n");
-    print_info("$$ Beggining %s function.\n",__FUNCTION__);
+    print_info("$$ beginning %s function.\n",__FUNCTION__);
 
     end_ptr=root_ptr+n;
-    ss_t * last_ptr=(end_ptr+1);
-    last_ptr=NULL;
-    last_ptr++;
-    last_ptr=NULL;
 
     ss_t * curr1_ptr;
-    curr1_ptr=go_back(root_ptr, end_ptr);
+    if(pre_contra)
+    {
+        print_info("$ Going back\n");
+        curr1_ptr=go_back(root_ptr, end_ptr);
+    }
+    else
+        curr1_ptr = end_ptr-1;
 
     ptrdiff_t diff1=end_ptr-curr1_ptr;
-    print_info("$ end_ptr-curr1_ptr (ptrdiff) is %td\n",diff1);
+    ptrdiff_t diff2=curr1_ptr-root_ptr;
+    UNUSED(diff1);
+    UNUSED(diff2);
+    print_info("$ end_ptr-curr1_ptr (ptrdiff) is %td curr1_ptr-root_ptr is %td\n",diff1, diff2);
 
     update(root_ptr,curr1_ptr);
     *(end_ptr)=*(curr1_ptr);
 
-    if(sudoku_is_solved_cellwise(*end_ptr))
+    if(sudoku_is_solved_hashwise(end_ptr))
     {
-        print_cellwise_solved(end_ptr,op,n);
-
-        return NULL;
+        print_solved(end_ptr, output, n);
+        return end_ptr;
     }
 
     print_contra(end_ptr, contra, pre_contra);
@@ -611,7 +566,7 @@ ss_t * fill_cells
     current_ptr=curr1_ptr;
 
     ptrdiff_t diff=end_ptr-current_ptr;
-
+    UNUSED(diff);
     print_info("$ end_ptr-current_ptr (ptrdiff) is %td\n",diff);
 
     print_info("$ n is %zu\n",n);
@@ -622,13 +577,13 @@ ss_t * fill_cells
     end_cell=end_ptr->cell[row][column];
 
     update(root_ptr,current_ptr);
-    fprint_ss(stdout, *(current_ptr));
+    fprint_ss(stdout, *current_ptr);
 
     first_uneq_cell(*current_ptr,*end_ptr,&row,&column);
 
-    print_info("`` first_uneq_cell, row is %d column is %d\n",row,column);
-    uint16_t cc1=all_possible_in_cell();
-    uint16_t ec1=all_possible_in_cell();
+    print_info("\n`` first_uneq_cell, row is %d column is %d\n",row,column);
+    uint16_t cc1=nine_possible();
+    uint16_t ec1=nine_possible();
     if(!(row==GRID_SIZE-1 && column==GRID_SIZE-1))
     {
         print_info("$ row is %d, column is %d\n",row,column);
@@ -643,7 +598,7 @@ ss_t * fill_cells
 
     bool moving_forward= true;
 
-    if(is_single_value(cc1)&&is_single_value(ec1)&& ec1<cc1)
+    if(is_single_value(cc1) && is_single_value(ec1) && ec1<cc1)
     {
         print_info("$ moving_forward is false\n");
 
@@ -669,7 +624,7 @@ ss_t * fill_cells
         print_4_cells(root_cell,current_cell, cell, end_cell);
 
         uint16_t n_cell=next_cell(cell);
-        uint16_t esv_cell=eliminate_single_value(n_cell,cell);
+        uint16_t esv_cell=cell;
 
         print_cell(n_cell);
         print_cell(esv_cell);
@@ -677,13 +632,14 @@ ss_t * fill_cells
         *end_ptr=*current_ptr;
         end_ptr->cell[row][column]=n_cell;
 
-        init_isv(end_ptr);
+        zero_minhash(end_ptr);
 
         update(root_ptr,end_ptr);
 
         bool ir=is_repeated(root_ptr,end_ptr);
 
         uint8_t pc=popcnt(n_cell);
+        UNUSED(pc);
         if(ir)
             print_info("`` ir is true, pc is %u\n",pc);
 
@@ -697,8 +653,8 @@ ss_t * fill_cells
         if(cell==0)
             fatal_err("cell is %u",cell);
 
-        init_isv(current_ptr);
-
+        zero_minhash(current_ptr);
+        
         current_ptr->cell[row][column]=esv_cell;
 
         update(root_ptr,current_ptr);
@@ -706,86 +662,56 @@ ss_t * fill_cells
         print_cell(esv_cell);
 
         bool hce=has_contra(*end_ptr);
-
-        fill_cells(root_ptr,n+1,hce, op, nmax); // recursion
+        
+        end_ptr=fill_cells(root_ptr, n+1, hce, output, nmax);
     }
 
     return end_ptr;
 }
 
-void init_isv(ss_t * const ss_ptr)
+void zero_minhash(ss_t * const ss_ptr)
 {
-    unsigned row;
-    unsigned column;
-
     ss_ptr->min_hash=0;
-    for(row=0; row<=GRID_SIZE-1; row++)
-        for(column=0; column<=GRID_SIZE-1; column++)
+    return;
+}
 
-            ss_ptr->cell_isv[row][column]=false;
+void update_hashes(ss_t *const ss_ptr)
+{
+    zero_minhash(ss_ptr);
+    compute_hash(ss_ptr);
 
     return;
 }
 
-
-void update_isv_hash(ss_t *const ss_ptr) // after implement constraints
-{
-    unsigned row;
-    unsigned column;
-
-    uint16_t hash=0;
-
-    init_isv(ss_ptr);
-    for(row=0; row<=GRID_SIZE-1; row++)
-        for(column=0; column<=GRID_SIZE-1; column++)
-            if(is_single_value(ss_ptr->cell[row][column]))
-                ss_ptr->cell_isv[row][column]=true;
-
-    hash=compute_hash(*ss_ptr);
-
-    ss_ptr->hash=hash;
-
-    return ;
-
-}
-
-uint16_t all_possible_in_cell(void)
+uint16_t nine_possible(void)
 {
     uint16_t r=0;
-    enum SINGLE_VALUE sv;
+    unsigned sv;
     for(sv=ONE; sv<=NINE; sv<<=1)
         r |= sv;
 
     return r;
 }
 
-uint16_t compute_hash(ss_t ss)
+void compute_hash(ss_t *ss_ptr)
 {
     uint16_t hash=0;
-
     unsigned row;
     unsigned column;
 
-    for(row=0; row<=GRID_SIZE-1; row++)
-        for(column=0; column<=GRID_SIZE-1; column++)
-            if(ss.cell_isv[row][column])
-            {
+    for(row=0; row<GRID_SIZE; row++)
+        for(column=0; column<GRID_SIZE; column++)
+            if(is_single_value(ss_ptr->cell[row][column]))
                 hash++;
 
-            }
-
-
-    if(hash<ss.min_hash || hash>MAX_HASH)
-    {
-        fatal_err("wrong hash in compute_hash, hash is %u",hash);
-    }
-
-    return hash;
+    if(hash<ss_ptr->min_hash || hash>MAX_HASH)
+        fatal_err("wrong hash in compute_hash, hash is %u", hash);
+    ss_ptr->hash = hash;
+    return;
 }
 
 unsigned count_zero_bits_on_right(uint32_t v)
 {
-    // https://graphics.stanford.edu/~seander/bithacks.html#ZerosOnRightBinSearch
     unsigned c;
 
     if(v==0)
@@ -821,24 +747,25 @@ unsigned count_zero_bits_on_right(uint32_t v)
         c -= v & 0x1;
     }
 
-    if(c>GRID_SIZE) // was if(c>=9)
+    if(c>GRID_SIZE)
         fatal_err("Count zero bits failed, c is %u\n",c);
 
     return c;
 }
 
-
 bool is_single_value(uint16_t value)
 {
-    bool b=false;
-    enum SINGLE_VALUE sv;
+    unsigned sv;
 
     for(sv=ONE; sv<=NINE; sv<<=1)
         if(value == sv)
-            b=true;
+        {
+            assert(popcnt(value)==1);
+            return true;
+        }
 
-    return b;
-
+    assert(popcnt(value) != 1);
+    return false;
 }
 
 bool sudoku_states_equal(ss_t ss1, ss_t ss2)
@@ -846,25 +773,24 @@ bool sudoku_states_equal(ss_t ss1, ss_t ss2)
     unsigned row;
     unsigned column;
     bool r=true;
-    uint16_t ss1_rc;
-    uint16_t ss2_rc;
+    uint16_t ss1_cell;
+    uint16_t ss2_cell;
 
     if(ss1.hash != ss2.hash)
         r=false;
 
     if(r==true)
     {
-        for(row=0; row<=GRID_SIZE-1; row++)
-            for(column=0; column<=GRID_SIZE-1; column++)
+        for(row=0; row<GRID_SIZE; row++)
+            for(column=0; column<GRID_SIZE; column++)
             {
-                ss1_rc=ss1.cell[row][column];
-                ss2_rc=ss2.cell[row][column];
+                ss1_cell=ss1.cell[row][column];
+                ss2_cell=ss2.cell[row][column];
 
-                if(ss1_rc!=ss2_rc)
+                if(ss1_cell != ss2_cell)
                     r=false;
             }
     }
-
 
     if(r==true && (ss1.hash!=ss2.hash) )
         fatal_err("sudoku states are equal, but hashes are not.");
@@ -872,461 +798,389 @@ bool sudoku_states_equal(ss_t ss1, ss_t ss2)
     return r;
 }
 
-bool sudoku_is_solved_hashwise(ss_t ss)
+bool sudoku_is_solved_hashwise(ss_t * ss_ptr)
 {
-    bool r=false;
-    if(ss.hash == MAX_HASH)
-        r=true;
+    if(ss_ptr->hash == MAX_HASH && ss_ptr->contra==false)
+        return true;
 
-    return r;
+    return false;
 }
-
-bool sudoku_is_solved_cellwise(ss_t ss)
-{
-    unsigned row;
-    unsigned column;
-    bool r=true;
-    uint8_t contradiction;
-    bool isv;
-
-    for(row=0; row<=GRID_SIZE-1; row++)
-        for(column=0; column<=GRID_SIZE-1; column++)
-        {
-            contradiction=ss.contradiction[row][column];
-            isv=is_single_value(ss.cell[row][column]);
-
-            if(contradiction!=0 || !isv)
-                r=false;
-        }
-
-
-    return r;
-}
-
 
 uint16_t eliminate_single_value(uint16_t remove_this,uint16_t original)
 {
-    uint16_t sc3= original&(~remove_this);
+    uint16_t sc3 = original & (~remove_this);
     return sc3;
 }
 
-// TODO this function could be called several times untill hash stayes the same
+uint16_t remove_right_one(uint16_t v)
+{
+    v -= v & -v;
+    return v;
+}
+
 void implement_constraints(ss_t * const ss_ptr)
 {
-    uint8_t row;
-    uint8_t column;
-    uint8_t row2;
-    uint8_t column2;
-    uint16_t sc1=all_possible_in_cell();
-    uint16_t sc2=all_possible_in_cell();
-    uint16_t hash=0;
+    naked_cell(ss_ptr);
+    
+    hidden_row(ss_ptr);
+    hidden_column(ss_ptr);
+    // TODO hidden region
 
-    for(row=0; row<=GRID_SIZE-1; row++)
-        for(column=0; column<=GRID_SIZE-1; column++)
-            for(row2=0; row2<=GRID_SIZE-1; row2++)
-                for(column2=0; column2<=GRID_SIZE-1; column2++)
-                {
-                    if(row==row2 && column==column2)
-                        continue;
-                    if(ro_co_re(row,column,row2,column2))
-                    {
-                        sc1=ss_ptr->cell[row][column];
-                        sc2=ss_ptr->cell[row2][column2];
-                        if(is_single_value(sc1) && !is_single_value(sc2) )
-                            sc2=eliminate_single_value(sc1,sc2);
+    compute_hash(ss_ptr);
 
-                        if(!is_single_value(sc1) && is_single_value(sc2) )
-                            sc1=eliminate_single_value(sc2,sc1);
-                        ss_ptr->cell[row][column]=sc1;
-                        ss_ptr->cell[row2][column2]=sc2;
-                    }
-                }
-
-
-
-    hash=compute_hash(*ss_ptr);
-
-    if(hash<ss_ptr->min_hash || hash>MAX_HASH)
-        fatal_err("wrong hash, hash is %u",hash);
-    ss_ptr->hash=hash;
-
-    compute_contradictions(ss_ptr);
-
+    compute_contra(ss_ptr);
     return;
 }
 
-void compute_contradictions(ss_t *ss)
+void naked_cell(ss_t * ss_ptr)
 {
     uint8_t row;
     uint8_t column;
     uint8_t row2;
     uint8_t column2;
-    bool rcr=false;
-    uint16_t cell_1;
-    uint16_t cell_2;
-    bool cell_1_isv;
-    bool cell_2_isv;
+    uint16_t first_cell=nine_possible();
+    uint16_t second_cell=nine_possible();
 
-    if(ss==NULL)
-        fatal_err("wrong pointer.");
-
-    for(row=0; row<=GRID_SIZE-1; row++)
-        for(column=0; column<=GRID_SIZE-1; column++)
-            ss->contradiction[row][column]=0;
-
-    for(row=0; row<=GRID_SIZE-1; row++)
-        for(column=0; column<=GRID_SIZE-1; column++)
-            for(row2=0; row2<=GRID_SIZE-1; row2++)
-                for(column2=0; column2<=GRID_SIZE-1; column2++)
+    for(row=0; row<GRID_SIZE; row++)
+        for(column=0; column<GRID_SIZE; column++)
+            for(row2=0; row2<GRID_SIZE; row2++)
+                for(column2=0; column2<GRID_SIZE; column2++)
                 {
-                    if(row==row2 && column==column2)
+                    if(row==row2 && column==column2) // ignore same cell
                         continue;
-                    rcr=ro_co_re(row,column,row2,column2);
-                    cell_1=ss->cell[row][column];
-                    cell_2=ss->cell[row2][column2];
-                    cell_1_isv = is_single_value(cell_1);
-                    cell_2_isv=is_single_value(cell_2);
-                    if( (rcr || row==row2||column==column2)&& cell_1==cell_2 && cell_1_isv &&cell_2_isv)
+
+                    if(row_column_region(row,column,row2,column2))
                     {
-                        ss->contradiction[row][column]++;
+                        first_cell=ss_ptr->cell[row][column];
+                        second_cell=ss_ptr->cell[row2][column2];
+                        if(is_single_value(first_cell) && !is_single_value(second_cell) )
+                        {
+                            second_cell=eliminate_single_value(first_cell,second_cell);
+                            ss_ptr->cell[row2][column2]=second_cell;
+                        }
 
+                        if(!is_single_value(first_cell) && is_single_value(second_cell) )
+                        {
+                            first_cell=eliminate_single_value(second_cell,first_cell);
+                            ss_ptr->cell[row][column]=first_cell;
+                        }
+                        ss_ptr->cell[row][column]=first_cell;
+                        ss_ptr->cell[row2][column2]=second_cell;
                     }
-
-
                 }
     return;
 }
-
-bool ro_co_re(uint8_t ro1,uint8_t co1,uint8_t ro2,uint8_t co2) // row column region
+void hidden_row(ss_t * ss_ptr)
 {
-    bool r=false;
+    int row;
+    int i;
+    int j;
+    for(row=0; row<GRID_SIZE; row++)
+        for(i=0; i<GRID_SIZE; i++)
+        {
+            uint16_t rest8 = 0;
+            for(j=0; j<GRID_SIZE; j++)
+            {
+                if(j==i)
+                    continue;
+                rest8 |= ss_ptr->cell[row][j];
+            }
+            uint16_t missing = nine_possible() & ~rest8 & ss_ptr->cell[row][i];
+            if(is_single_value(missing))
+                ss_ptr->cell[row][i] = missing;
+        }
+    return;
+}
+void hidden_column(ss_t * ss_ptr)
+{
+    int column;
+    int i;
+    int j;
+    for(column=0; column<GRID_SIZE; column++)
+        for(i=0; i<GRID_SIZE; i++)
+        {
+            uint16_t rest8 = 0;
+            for(j=0; j<GRID_SIZE; j++)
+            {
+                if(j==i)
+                    continue;
+                rest8 |= ss_ptr->cell[j][column];
+            }
+            uint16_t missing = nine_possible() & ~rest8 & ss_ptr->cell[i][column];
+            if(is_single_value(missing))
+                ss_ptr->cell[i][column] = missing;
+        }
+    return;
+}
 
+bool row_column_region(uint8_t ro1,uint8_t co1,uint8_t ro2,uint8_t co2)
+{
     if(ro1==ro2 || co1==co2)
-        r=true;
+        return true;
 
     if(in_region(ro1,co1,ro2,co2))
-        r=true;
+        return true;
 
-    return r;
+    return false;
 }
 
 bool in_region(uint8_t ro1,uint8_t co1,uint8_t ro2,uint8_t co2)
 {
-    bool r=false;
-
     if(in_range(ro1,0,2) && in_range(co1,0,2) && in_range(ro2,0,2) && in_range(co2,0,2))
-        r=true;
+        return true;
     if(in_range(ro1,0,2) && in_range(co1,3,5) && in_range(ro2,0,2) && in_range(co2,3,5))
-        r=true;
+        return true;
     if(in_range(ro1,0,2) && in_range(co1,6,8) && in_range(ro2,0,2) && in_range(co2,6,8))
-        r=true;
+        return true;
     if(in_range(ro1,3,5) && in_range(co1,0,2) && in_range(ro2,3,5) && in_range(co2,0,2))
-        r=true;
+        return true;
     if(in_range(ro1,3,5) && in_range(co1,3,5) && in_range(ro2,3,5) && in_range(co2,3,5))
-        r=true;
+        return true;
     if(in_range(ro1,3,5) && in_range(co1,6,8) && in_range(ro2,3,5) && in_range(co2,6,8))
-        r=true;
+        return true;
     if(in_range(ro1,6,8) && in_range(co1,0,2) && in_range(ro2,6,8) && in_range(co2,0,2))
-        r=true;
+        return true;
     if(in_range(ro1,6,8) && in_range(co1,3,5) && in_range(ro2,6,8) && in_range(co2,3,5))
-        r=true;
+        return true;
     if(in_range(ro1,6,8) && in_range(co1,6,8) && in_range(ro2,6,8) && in_range(co2,6,8))
-        r=true;
+        return true;
 
-    return r;
+    return false;
 }
 
 bool in_range(uint8_t v,uint8_t min, uint8_t max )
 {
-    bool r=false;
-
     if(v>=min && v<=max)
-        r=true;
+        return true;
 
-    return r;
+    return false;
 }
 
-bool is_unsolvable (ss_t ss)
+bool is_unsolvable(ss_t ss)
 {
     uint8_t row;
     uint8_t column;
-    bool r=false;
     uint16_t cell=0;
-    uint16_t apic=all_possible_in_cell();
+    uint16_t apic=nine_possible();
 
-    for(row=0; row<=GRID_SIZE-1; row++)
+    for(row=0; row<GRID_SIZE; row++)
     {
-        for(column=0; column<=GRID_SIZE-1; column++)
+        for(column=0; column<GRID_SIZE; column++)
         {
             cell=ss.cell[row][column];
-            apic=all_possible_in_cell();
+            apic=nine_possible();
             if(cell==0 || cell>apic)
-                r=true;
+                return true;
         }
         if(column>GRID_SIZE-1)
             column=GRID_SIZE-1;
         cell=ss.cell[row][column];
-        apic=all_possible_in_cell();
+        apic=nine_possible();
         if(cell==0 || cell>apic)
-            r=true;
+            return true;
     }
 
-    return r;
+    return false;
 }
 
-bool has_contra (ss_t ss)
+bool has_contra(ss_t ss)
 {
-    uint8_t row=0;
-    uint8_t column=0;
-    bool r=false;
-
-    for(row=0; row<=GRID_SIZE-1; row++)
-        for(column=0; column<=GRID_SIZE-1; column++)
-            if(ss.contradiction[row][column]!=0)
-            {
-                print_info("$$ $ %s: row is %u column is %u\n ",__FUNCTION__,row,column);
-                print_info("$$ $$ ");
-                print_cell(ss.cell[row][column]);
-                return true;
-            }
-
-    return r;
+    compute_contra(&ss);
+    return ss.contra;
 }
 
-bool def_no_solution(ss_t ss)
+bool no_solution(ss_t ss)
 {
     bool r;
-    r= is_unsolvable(ss) || has_contra(ss);
+    r = is_unsolvable(ss) || has_contra(ss);
     return r;
 }
 
 ///////////////////////////////////////////////////
-void update(ss_t * const root_ptr,ss_t * const ss_ptr)
-{
 
+void update(ss_t * const root_ptr, ss_t * const ss_ptr)
+{
     if(root_ptr==NULL || ss_ptr==NULL )
         fatal_err("wrong pointer.");
 
     implement_constraints((ss_ptr));
 
-    update_isv_hash(ss_ptr);
-    compute_contradictions(ss_ptr);
+    update_hashes(ss_ptr);
 
     ss_ptr->min_hash=root_ptr->hash;
 
     return;
-
 }
 
-void previous_cell(int *const row, int *const column)
-{
-    if(row==NULL || column==NULL)
-        fatal_err("wrong pointer.");
-
-    if(*row==0 && *column==0)
-        fatal_err("Can not step back any further.");
-
-    if(*column==0)
-    {
-        (*row)--;
-        *column=GRID_SIZE-1;
-
-    }
-    else
-        (*column)--;
-
-    return;
-}
-
-
-ss_t get_ss(char const * const ip, char const * const op)
+ss_t get_ss(char const * const input, char const * const output, int count, time_t begin)
 {
     unsigned row=0;
     unsigned column=0;
 
-    ss_t ss1
-    = {.min_hash=0,.hash=0,.cell={{0}},.cell_isv={{false}},.contradiction={{0}} };
-    FILE *f_input = NULL;
+    ss_t ss1 = {.min_hash=0,.hash=0, .contra=false, .cell={{0}} };
+    FILE *input_file = NULL;
     char line[LINE_LEN]= {'\n','\0'};
-    char ch='0';// int for EOF
+    char ch='0';
 
     uint16_t apic=0;
     uint16_t hash=0;
     ss_t *ss_ptr=&ss1;
 
-    static long pos=0;
+    static long file_pos=0;
 
     if(ss_ptr==NULL)
         fatal_err("wrong pointer.");
 
-    f_input=fopen(ip,"rt");
-    if(f_input==NULL)
+    input_file=fopen(input,"rt");
+    if(input_file==NULL)
         fatal_err("Opening input file failed.");
 
-    if(pos==EOF)
+    if(file_pos==EOF)
         fatal_err("wrong pos, pos is EOF");
 
-    if(pos==EOF)
+    if(file_pos==EOF)
         fatal_err("pos failed.");
 
-    fseek(f_input, pos * (long)sizeof(char), SEEK_SET);
+    fseek(input_file, file_pos * (long)sizeof(char), SEEK_SET);
 
-    print_info("``` up_pos is %ld, current_ch is %c\n",pos,getc(f_input));
+    print_info("``` up_pos is %ld, current_ch is %c\n", file_pos, getc(input_file));
 
     do
     {
-
-        fscanf(f_input,"%125s\n", line);
-        if(feof(f_input) )
+        fscanf(input_file, "%125s\n", line);
+        if(feof(input_file) )
         {
-            print_finish(ip, op);
+            print_finish(input, output, count, begin);
         }
 
     }
     while(strchr(line,input_sep)!=NULL);
 
-    int oc=ungetc(line[0],f_input);
+    int oc=ungetc(line[0], input_file);
     if(oc==EOF)
         fatal_err("ungetc failed, EOF is returned.");
 
-    for (row=0; row<=GRID_SIZE-1; row++)
+    for (row=0; row<GRID_SIZE; row++)
     {
 
-        for (column=0; column<=GRID_SIZE-1; column++)
+        for (column=0; column<GRID_SIZE; column++)
         {
             do
-                fscanf(f_input,"%c ",&ch);
-            while(ch==' ' || ch=='\n')
-                ;
-            if( ! ((ch>='1' && ch<='9') || (ch=='*') ) )
-
+                fscanf(input_file ,"%c ", &ch);
+            while(ch==' ' || ch=='\n');
+            
+            if( ! ((ch>='1' && ch<='9') || ch=='*' ) )
                 fatal_err("Unacceptable input char, char is %c",ch);
 
-            apic=all_possible_in_cell();
+            apic=nine_possible();
 
             ss1.cell[row][column] = (uint16_t)(ch=='*' ? apic : 1<<(ch-'1') );
-            ss1.cell_isv[row][column] = (ch=='*'? false: true);
-
         }
 
     }
 
-    pos = ftell(f_input);
+    file_pos = ftell(input_file);
 
-    if(pos==EOF)
+    if(file_pos==EOF)
         fatal_err("pos failed.");
 
-    print_info("``` down_pos is %ld, current_ch is %c\n",pos,getc(f_input));
+    print_info("``` down_pos is %ld, current_ch is %c\n", file_pos, getc(input_file));
 
-    fclose(f_input);
+    fclose(input_file);
 
-    hash=compute_hash(ss1);
+    compute_hash(&ss1);
     ss1.hash=hash;
 
     ss1.min_hash=hash;
 
-    compute_contradictions(ss_ptr);
-
     return ss1;
 }
 
-
-void fprint_ss(FILE* of,ss_t ss)
+void fprint_ss(FILE* output_file, ss_t ss)
 {
-
     unsigned row;
     unsigned column;
-    uint16_t sc=0;
+    uint16_t cell=0;
     unsigned uc;
+    UNUSED(uc);
 
-    if(of==stdout)
+    if(output_file == stdout)
     {
 #ifdef DEBUG
-        fprintf(of,"\nhash is %u\n",ss.hash);
+        fprintf(output_file, "\nhash is %u\n", ss.hash);
+        fprintf(output_file, "contra is %u\n", ss.contra);
 
-
-        fprintf(of,"Value in cells:\n");
-        for(row=0; row<=GRID_SIZE-1; row++)
+        fprintf(output_file, "Value in cells:\n");
+        for(row=0; row<GRID_SIZE; row++)
         {
-            for(column=0; column<=GRID_SIZE-1; column++)
+            for(column=0; column<GRID_SIZE; column++)
             {
-
-                uc=count_zero_bits_on_right(ss.cell[row][column]);
-                fprintf(of,"%u ",uc+1);
+                uint16_t cell = ss.cell[row][column];
+                if(is_single_value(cell))
+                    uc = count_zero_bits_on_right(cell)+1;
+                else
+                    uc = 0;
+                fprintf(output_file, "%u ", uc);
             }
-            fprintf(of,"\n");
+            fprintf(output_file, "\n");
         }
 #endif // DEBUG
     }
     else
     {
-        if(of !=stdout)
-            ftell(of);
+        if(output_file !=stdout)
+            ftell(output_file);
     }
 
-    if(of != stdout)
+    if(output_file != stdout)
     {
-        for(row=0; row<=GRID_SIZE-1; row++)
+        for(row=0; row<GRID_SIZE; row++)
         {
-            for(column=0; column<=GRID_SIZE-1; column++)
+            for(column=0; column<GRID_SIZE; column++)
             {
-
-                sc=ss.cell[row][column];
-                if(is_single_value(sc))
+                cell=ss.cell[row][column];
+                if(is_single_value(cell))
                 {
 
-                    fprintf(of,"%u ",count_zero_bits_on_right(sc)+1);
-                    if(of !=stdout)
-                        ftell(of);
+                    fprintf(output_file, "%u ", count_zero_bits_on_right(cell)+1);
+                    if(output_file !=stdout)
+                        ftell(output_file);
                 }
                 else
                 {
 
-                    fprintf(of,"%c ",'*');
-                    if(of !=stdout)
-                        ftell(of);
+                    fprintf(output_file, "%c ", '*');
+                    if(output_file !=stdout)
+                        ftell(output_file);
                 }
             }
 
-            fprintf(of,"\n");
-            if(of !=stdout)
-                ftell(of);
+            fprintf(output_file,"\n");
+            if(output_file !=stdout)
+                ftell(output_file);
         }
     }
 
-    if(of==stdout)
+    if(output_file == stdout)
     {
-#ifdef DEBUG
-        //printf("\n");
-        fprintf(of,"\nBounded cells:\n");
-        for(row=0; row<=GRID_SIZE-1; row++)
+#ifdef BOUNDED
+        fprintf(output_file, "\nBounded cells:\n");
+        for(row=0; row<GRID_SIZE; row++)
         {
-            for(column=0; column<=GRID_SIZE-1; column++)
-                //printf(ibc.cell[row][column]==true?"1 ":"0 ");
-                fprintf(of,ss.cell_isv[row][column]==true?"1 ":"0 ");
-            fprintf(of,"\n");
+            for(column=0; column<GRID_SIZE; column++)
+                fprintf(output_file, is_single_value(ss.cell[row][column])==true ? "1 " : "0 ");
+            fprintf(output_file, "\n");
         }
 
-        fprintf(of,"\nContradictions:\n");
-        for(row=0; row<=GRID_SIZE-1; row++)
-        {
-            for(column=0; column<=GRID_SIZE-1; column++)
-                fprintf(of,"%d ",ss.contradiction[row][column]);
-            fprintf(of,"\n");
-        }
-#endif // DEBUG
+#endif
     }
-
-
 }
 
-
-noreturn void fatal_err_callee(const char * const s) // help from comp.lang.c
+noreturn void fatal_err_callee(const char * const s)
 {
     if ((s == NULL) || (*s == '\0'))
     {
-        fprintf(stderr, "Please provide a proper message for "
-                "fatal_err_callee function.\n");
+        fprintf(stderr, "Please provide a proper message for fatal_err_callee function.\n");
         exit(EXIT_FAILURE);
     }
 #pragma clang diagnostic push
@@ -1337,7 +1191,7 @@ noreturn void fatal_err_callee(const char * const s) // help from comp.lang.c
 
 #pragma clang diagnostic pop
 
-    fprintf(stderr, "\nERROR:%s\n", s);
+    fprintf(stderr, "ERROR:%s\n\n", s);
     exit(EXIT_FAILURE);
 }
 
@@ -1345,8 +1199,7 @@ void print_info_callee(const char * const s)
 {
     if ((s == NULL) || (*s == '\0'))
     {
-        fprintf(stderr, "Please provide a proper message for "
-                "print_info_callee function.\n");
+        fprintf(stderr, "Please provide a proper message for print_info_callee function.\n");
         exit(EXIT_FAILURE);
     }
 
@@ -1357,10 +1210,10 @@ void print_info_callee(const char * const s)
 
 void *my_alloc( size_t size )
 {
-    void *alloc_ptr = NULL; // see: http://c-faq.com/ptrs/passptrinit.html
-    alloc_ptr = malloc(size);
+    void *alloc_ptr = NULL;
+    alloc_ptr = malloc(size+1);
 
-    if( alloc_ptr == NULL )
+    if(alloc_ptr == NULL)
         fatal_err("alloc_ptr memory allocation failed.");
 
     return alloc_ptr;
@@ -1368,7 +1221,6 @@ void *my_alloc( size_t size )
 
 uint8_t popcnt(uint32_t v)
 {
-    //https://graphics.stanford.edu/~seander/bithacks.html
     uint8_t c;
     for (c = 0; v; c++)
     {
@@ -1377,8 +1229,7 @@ uint8_t popcnt(uint32_t v)
     return c;
 }
 
-void first_uneq_cell
-(const ss_t current_ptr, const ss_t end_ptr,int *const row,int *const column)
+void first_uneq_cell(const ss_t current_ptr, const ss_t end_ptr,int *const row,int *const column)
 {
     uint16_t current_cell=0;
     uint16_t end_cell=0;
@@ -1389,13 +1240,13 @@ void first_uneq_cell
     *row=0;
     *column=0;
 
-    for(*row=0; *row<=GRID_SIZE-1; (*row)++)
+    for(*row=0; *row<GRID_SIZE; (*row)++)
     {
-        for(*column=0; *column<=GRID_SIZE-1; (*column)++)
+        for(*column=0; *column<GRID_SIZE; (*column)++)
         {
             current_cell=current_ptr.cell[*row][*column];
             end_cell=end_ptr.cell[*row][*column];
-            if(current_cell!=end_cell )
+            if(current_cell!=end_cell)
 
                 break;
         }
@@ -1406,8 +1257,7 @@ void first_uneq_cell
 
         current_cell=current_ptr.cell[*row][*column];
         end_cell=end_ptr.cell[*row][*column];
-        if(current_cell!=end_cell )
-
+        if(current_cell!=end_cell)
             break;
     }
 
@@ -1419,8 +1269,7 @@ void first_uneq_cell
     return;
 }
 
-bool is_repeated
-(ss_t *const root_ptr,ss_t *const end_ptr)
+bool is_repeated(ss_t *const root_ptr,ss_t *const end_ptr)
 {
     bool ir=false;
     ss_t *current_ptr=root_ptr;
@@ -1432,32 +1281,77 @@ bool is_repeated
     {
         if(sudoku_states_equal(*current_ptr,*end_ptr))
         {
-            ptrdiff_t pd=end_ptr-current_ptr;
-            print_info("$ is_repeated diff %td\n",pd);
+            ptrdiff_t diff=end_ptr-current_ptr;
+            UNUSED(diff);
+            print_info("$ is_repeated diff %td\n", diff);
             ir=true;
             break;
         }
-
     }
-
     return ir;
 }
 
-noreturn void print_finish(char const * const ip, char const * const op)
+bool no_contradiction(ss_t *ss_ptr)
 {
-    printf("EOF in input file %s reached.\n",ip);
-    printf("Output file name is %s\n",op);
+    assert(ss_ptr->hash >= 0);
+    assert(ss_ptr->hash <= GRID_SIZE * GRID_SIZE);
+    
+    if(ss_ptr->hash == GRID_SIZE * GRID_SIZE)
+        return true;
+    return false;
+}
+
+void compute_contra(ss_t *ss_ptr)
+{
+    uint8_t row;
+    uint8_t column;
+    uint8_t row2;
+    uint8_t column2;
+    uint16_t cell_1;
+    uint16_t cell_2;
+    bool cell_1_isv;
+    bool cell_2_isv;
+
+    ss_ptr->contra = false;
+    for(row=0; row<GRID_SIZE; row++)
+        for(column=0; column<GRID_SIZE; column++)
+            for(row2=0; row2<GRID_SIZE; row2++)
+                for(column2=0; column2<GRID_SIZE; column2++)
+                {
+                    if(row==row2 && column==column2) // ignore same cell
+                        continue;
+                    bool related = row_column_region(row,column,row2,column2);
+                    cell_1=ss_ptr->cell[row][column];
+                    cell_2=ss_ptr->cell[row2][column2];
+                    cell_1_isv = is_single_value(cell_1);
+                    cell_2_isv=is_single_value(cell_2);
+                    if(related && cell_1==cell_2 && cell_1_isv && cell_2_isv)
+                    {
+                        ss_ptr->contra = true;
+                        return;
+                    }
+                }
+    return;
+}
+
+noreturn void print_finish(char const * const input, char const * const output, int count, time_t begin)
+{
+    time_t end;
+    time(&end);
+    printf("EOF in input file %s reached.\n",input);
+    printf("Output file name is %s\n",output);
+    printf("Count of solved sudokus is %d\n", count);
+    printf("Average time on solving each puzzle is %lf sec\n", difftime(end, begin)/count);
     exit (EXIT_SUCCESS);
 }
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-parameter"
-
 void print_cell_callee(const char* const cell_name, uint16_t cell)
 {
+    UNUSED(cell_name);
+    UNUSED(cell);
 #ifdef DEBUG
 
-    enum SINGLE_VALUE sv;
+    unsigned sv;
     unsigned char ch='0';
 
     if(cell_name[0]=='\0')
@@ -1466,16 +1360,14 @@ void print_cell_callee(const char* const cell_name, uint16_t cell)
     printf("`` %s (1..9) is ",cell_name);
     for(sv=ONE; sv<=NINE; sv<<=1)
     {
-        uint16_t cell_sv=cell&sv;
+        uint16_t cell_sv = cell & sv;
         if(cell_sv)
         {
-            ch=try_next(cell_sv)+'0';
+            ch = try_next(cell_sv) + '0';
             if(ch<'0' || ch>'9')
                 fatal_err("Illegal char.");
             printf("%c ",ch);
         }
-
-
     }
 
     if(cell==0)
@@ -1483,9 +1375,7 @@ void print_cell_callee(const char* const cell_name, uint16_t cell)
     printf("\n");
     printf("%c",'\0');
 
-
 #endif // DEBUG
 }
-#pragma clang diagnostic pop
 
 // @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ //

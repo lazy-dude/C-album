@@ -13,6 +13,9 @@ gcc -Wall -Wextra -pedantic -lcunit -lm -std=c11 file_name.c
 ```
 clang -Wall -Wextra -pedantic -lcunit -lm -std=c11 file_name.c
 ```
+
+Add `-static` flag to use static linking.  
+
 ### Executing output file in same directory:
 ```
 ./a.out
